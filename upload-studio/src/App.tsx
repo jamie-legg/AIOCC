@@ -19,6 +19,7 @@ const initialMetadata: Metadata = {
 
 const initialStatus: StudioStatus = {
   authenticated: false,
+  role: 'user',
   user: { name: 'AIOCC' },
   platforms: [
     { platform: 'youtube', label: 'YouTube', handle: 'Not connected', connected: false, accent: '#ff1f3d' },
@@ -75,6 +76,7 @@ function App() {
   }, [previewUrl]);
 
   const connectedPlatforms = useMemo(() => status.platforms.filter((platform) => platform.connected), [status.platforms]);
+  const isAdmin = status.role === 'admin';
 
   const handleSelectFile = async (file: File) => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -105,6 +107,10 @@ function App() {
   };
 
   const handlePlatformAuth = async (platform: PlatformKey) => {
+    if (!isAdmin) {
+      setNotice('Platform connections are managed by an admin.');
+      return;
+    }
     setAuthenticating(platform);
     setNotice(null);
     try {
@@ -182,10 +188,10 @@ function App() {
         <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_10%_0%,rgba(50,199,244,0.14),transparent_32%),radial-gradient(circle_at_95%_10%,rgba(217,70,239,0.12),transparent_30%)]" />
         <main className="mx-auto flex min-h-screen max-w-xl items-center px-6">
           <form className="panel w-full p-6" onSubmit={handleUnlock}>
-            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-studio-cyan">Admin Access</div>
+            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-studio-cyan">Studio Access</div>
             <h1 className="mt-3 text-2xl font-bold">Unlock Upload Studio</h1>
             <p className="mt-3 text-sm text-studio-muted">
-              Production access is restricted. Enter the admin token to manage connections, generate metadata, and publish uploads.
+              Production access is restricted. Enter an admin or alpha user token to continue.
             </p>
             {notice ? <div className="mt-4 rounded-lg border border-studio-danger/30 bg-studio-danger/10 px-4 py-3 text-sm text-studio-danger">{notice}</div> : null}
             <input
@@ -193,7 +199,7 @@ function App() {
               type="password"
               value={adminToken}
               onChange={(event) => setAdminToken(event.target.value)}
-              placeholder="Admin token"
+              placeholder="Access token"
               autoFocus
             />
             <button className="primary-button mt-5 w-full justify-center" type="submit">
@@ -216,9 +222,13 @@ function App() {
             Lock Studio
           </button>
         </div>
+        <div className="mb-4 rounded-lg border border-studio-border bg-black/10 px-4 py-3 text-sm text-studio-muted">
+          Signed in as <span className="font-semibold text-studio-text">{isAdmin ? 'Admin' : 'Alpha user'}</span>
+          {isAdmin ? ' - platform connections and publishing are enabled.' : ' - publishing is enabled after an admin connects platforms.'}
+        </div>
         <div className="grid grid-cols-3 gap-5">
           {status.platforms.map((platform) => (
-            <PlatformCard key={platform.platform} platform={platform} onClick={(item) => handlePlatformAuth(item.platform)} />
+            <PlatformCard key={platform.platform} platform={platform} onClick={(item) => handlePlatformAuth(item.platform)} canManageConnections={isAdmin} />
           ))}
         </div>
 
@@ -244,7 +254,7 @@ function App() {
                 if (file) handleSelectFile(file);
               }}
             />
-            <PlatformPicker platforms={connectedPlatforms} selected={selectedPlatforms} onToggle={handleTogglePlatform} />
+            <PlatformPicker platforms={connectedPlatforms} selected={selectedPlatforms} onToggle={handleTogglePlatform} canManageConnections={isAdmin} />
           </section>
 
           <div className="space-y-4">

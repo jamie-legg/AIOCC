@@ -5,7 +5,7 @@ Upload Studio keeps authentication focused on the web upload workflow.
 ## Current State
 
 - Backend account primitives for JWT sessions and API keys.
-- Upload Studio production access can be locked with `STUDIO_ADMIN_TOKEN`.
+- Upload Studio production access can be locked with `STUDIO_ADMIN_TOKEN` and `STUDIO_USER_TOKENS`.
 - OAuth credential storage for YouTube, Instagram, and TikTok.
 - Platform connect/re-auth flows started from `POST /api/v1/studio/auth/{platform}/start`.
 - Hosted callbacks at `/api/oauth/{platform}/callback`.
@@ -26,6 +26,7 @@ ALLOWED_ORIGINS=https://upload.syn.gl
 STUDIO_PUBLIC_BASE_URL=https://upload.syn.gl
 VITE_API_BASE_URL=https://upload.syn.gl
 STUDIO_ADMIN_TOKEN=<generate-a-long-random-value>
+STUDIO_USER_TOKENS=<comma-separated-alpha-user-tokens>
 ```
 
 Platform credentials:
@@ -132,7 +133,12 @@ The current hosted browser/callback flow is in place. The next cleanup should mo
 
 ## RBAC Target
 
-The admin-token gate is the immediate production lock. A fuller RBAC system should add:
+The immediate production lock has two token roles:
+
+1. Admin token: can connect/reconnect platform OAuth, generate metadata, upload, retry, and view studio status/history.
+2. Alpha user tokens: can generate metadata, upload, retry, and view studio status/history after an admin connects platforms. They cannot start platform OAuth.
+
+A fuller RBAC system should add:
 
 1. `admin` users who can connect platform accounts, review all uploads, retry failures, and manage users.
 2. `creator` users who can upload clips and view their own upload history.

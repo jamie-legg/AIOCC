@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 import requests
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import HTMLResponse
 from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel
@@ -32,18 +32,43 @@ if str(SRC_DIR) not in sys.path:
 from managers.oauth_manager import OAuthCredentials, OAuthManager  # noqa: E402
 from managers.upload_manager import UploadManager  # noqa: E402
 
-def require_studio_admin(request: Request) -> None:
-    """Require the private admin token when configured."""
-    expected_token = os.getenv("STUDIO_ADMIN_TOKEN", "").strip()
-    if not expected_token:
+def _configured_user_tokens() -> set[str]:
+    raw_tokens = os.getenv("STUDIO_USER_TOKENS", "")
+    return {token.strip() for token in raw_tokens.split(",") if token.strip()}
+
+
+def require_studio_access(request: Request) -> None:
+    """Require a private studio token and attach the resolved role."""
+    admin_token = os.getenv("STUDIO_ADMIN_TOKEN", "").strip()
+    user_tokens = _configured_user_tokens()
+
+    if not admin_token and not user_tokens:
+        request.state.studio_role = "admin"
         return
 
-    provided_token = request.headers.get("X-Studio-Admin-Token", "").strip()
-    if provided_token != expected_token:
-        raise HTTPException(status_code=401, detail="Admin access required")
+    provided_token = (
+        request.headers.get("X-Studio-Access-Token")
+        or request.headers.get("X-Studio-Admin-Token")
+        or ""
+    ).strip()
+
+    if admin_token and provided_token == admin_token:
+        request.state.studio_role = "admin"
+        return
+
+    if provided_token in user_tokens:
+        request.state.studio_role = "user"
+        return
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Studio access required")
 
 
-router = APIRouter(prefix="/api/v1/studio", tags=["studio"], dependencies=[Depends(require_studio_admin)])
+def require_studio_admin(request: Request) -> None:
+    if getattr(request.state, "studio_role", None) != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+
+router = APIRouter(prefix="/api/v1/studio", tags=["studio"], dependencies=[Depends(require_studio_access)])
 callback_router = APIRouter(prefix="/api/oauth", tags=["studio-oauth"])
 
 PLATFORMS = ("youtube", "instagram", "tiktok")
@@ -63,6 +88,7 @@ class PlatformStatus(BaseModel):
 
 class StudioStatus(BaseModel):
     authenticated: bool
+    role: Literal["admin", "user"]
     user: dict
     platforms: list[PlatformStatus]
 
@@ -363,7 +389,7 @@ def _save_oauth_credentials(platform: str, credentials: OAuthCredentials) -> Non
 
 
 @router.get("/status", response_model=StudioStatus)
-def get_status(db: Session = Depends(get_db)):
+def get_status(request: Request, db: Session = Depends(get_db)):
     """Return the upload studio shell state."""
     _get_or_create_studio_user(db)
     oauth_manager = OAuthManager()
@@ -442,6 +468,7 @@ def get_status(db: Session = Depends(get_db)):
 
     return StudioStatus(
         authenticated=True,
+        role=getattr(request.state, "studio_role", "user"),
         user={"name": settings.studio_user_name},
         platforms=platform_statuses,
     )
@@ -463,8 +490,9 @@ def generate_metadata(request: MetadataRequest):
 
 
 @router.post("/auth/{platform}/start", response_model=AuthStartResponse)
-def start_platform_auth(platform: str):
+def start_platform_auth(platform: str, request: Request):
     """Return a hosted OAuth URL for a platform."""
+    require_studio_admin(request)
     if platform not in PLATFORMS:
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
 

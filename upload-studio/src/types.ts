@@ -29,6 +29,7 @@ export interface RecentUpload {
 
 export interface StudioStatus {
   authenticated: boolean;
+  role: 'admin' | 'user';
   user: {
     name: string;
     avatarUrl?: string;

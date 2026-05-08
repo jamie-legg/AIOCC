@@ -15,6 +15,7 @@ export class ApiError extends Error {
 
 const fallbackStatus: StudioStatus = {
   authenticated: false,
+  role: 'user',
   user: {
     name: 'AIOCC',
   },
@@ -28,7 +29,7 @@ const fallbackStatus: StudioStatus = {
 const fallbackUploads: RecentUpload[] = [];
 
 export function getStoredAdminToken() {
-  return window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+  return window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || window.localStorage.getItem('aiocc_access_token') || '';
 }
 
 export function setStoredAdminToken(token: string) {
@@ -44,7 +45,7 @@ async function request<T>(path: string, init?: RequestInit, fallback?: T): Promi
     const headers = new Headers(init?.headers);
     const adminToken = getStoredAdminToken();
     if (adminToken) {
-      headers.set('X-Studio-Admin-Token', adminToken);
+      headers.set('X-Studio-Access-Token', adminToken);
     }
 
     const response = await fetch(`${API_BASE_URL}${path}`, {

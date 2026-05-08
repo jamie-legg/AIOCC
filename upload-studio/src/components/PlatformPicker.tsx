@@ -6,15 +6,16 @@ interface PlatformPickerProps {
   platforms: PlatformStatus[];
   selected: PlatformKey[];
   onToggle: (platform: PlatformKey) => void;
+  canManageConnections: boolean;
 }
 
-export function PlatformPicker({ platforms, selected, onToggle }: PlatformPickerProps) {
+export function PlatformPicker({ platforms, selected, onToggle, canManageConnections }: PlatformPickerProps) {
   return (
     <section className="panel mt-4 p-4">
       <h2 className="mb-4 text-base font-semibold text-studio-text">Upload to</h2>
       {platforms.length === 0 ? (
         <div className="rounded-lg border border-studio-border bg-black/10 p-4 text-sm text-studio-muted">
-          No connected platforms yet. Connect a platform from the cards above before uploading.
+          {canManageConnections ? 'No connected platforms yet. Connect a platform from the cards above before uploading.' : 'No connected platforms yet. An admin needs to connect a platform before alpha users can upload.'}
         </div>
       ) : null}
       <div className="grid grid-cols-3 gap-4">

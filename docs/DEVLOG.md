@@ -13,6 +13,7 @@
 - **Production OAuth redirect override**: Fixed the `syn-uk` private environment after verification showed Instagram still using an old ngrok redirect override. YouTube, Instagram, and TikTok production redirect variables now point to `https://upload.syn.gl/api/oauth/{platform}/callback`.
 - **Public history rewrite**: Replaced the newly published GitHub history with a clean public root commit so removed local databases, screenshots, overlays, and test media are no longer present in branch history.
 - **Production admin gate**: Added `STUDIO_ADMIN_TOKEN` protection for Upload Studio API routes and a frontend unlock screen. This stops public visitors from generating metadata, starting platform OAuth, uploading clips, retrying uploads, or reading studio status/history unless they have the admin token. Documented a fuller RBAC target for admin/creator/viewer roles and upload monitoring.
+- **Alpha user tokens**: Added `STUDIO_USER_TOKENS` as a comma-separated trusted-user token list. Tokens now resolve to `admin` or `user`; admin can manage platform OAuth while alpha users can unlock Upload Studio for metadata/upload/retry/history after an admin connects platforms.
 
 ## 2026-05-04 — upload-first rebuild
 
