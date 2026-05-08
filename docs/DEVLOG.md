@@ -14,6 +14,7 @@
 - **Public history rewrite**: Replaced the newly published GitHub history with a clean public root commit so removed local databases, screenshots, overlays, and test media are no longer present in branch history.
 - **JWT RBAC**: Replaced the temporary studio token gate with username/password login, JWT bearer auth, and `admin` / `creator` / `viewer` roles. Added bootstrap admin support, admin user creation, per-user upload history filtering, and an admin monitoring panel for user/upload counts.
 - **Password hashing**: Switched auth hashing to `pbkdf2_sha256` after production bootstrap hit bcrypt backend/version limits with generated credentials.
+- **auth.syn.gl SSO**: Repaired the existing `/data/auth` OAuth service on `syn-uk`, rotated its default admin password/secrets, registered Upload Studio as an OAuth client, issued a valid `auth.syn.gl` certificate, and added Upload Studio SSO start/callback routes while keeping local login as a fallback.
 
 ## 2026-05-04 — upload-first rebuild
 

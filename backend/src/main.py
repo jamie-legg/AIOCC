@@ -107,6 +107,7 @@ app.include_router(auth.router)
 app.include_router(enrichment.router)
 app.include_router(oauth_proxy.router)
 app.include_router(analytics.router)
+app.include_router(auth.sso_router)
 app.include_router(studio.router)
 app.include_router(studio.callback_router)
 

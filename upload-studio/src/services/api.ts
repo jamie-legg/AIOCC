@@ -82,6 +82,8 @@ export const studioApi = {
       body: JSON.stringify({ email, password }),
     }),
 
+  startSso: () => request<{ authUrl: string }>('/api/v1/auth/sso/start'),
+
   getMe: () => request<AuthUser>('/api/v1/auth/me'),
 
   listUsers: () => request<AuthUser[]>('/api/v1/auth/users'),

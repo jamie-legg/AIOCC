@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     allow_public_registration: bool = False
     bootstrap_admin_email: str = ""
     bootstrap_admin_password: str = ""
+    auth_syn_base_url: str = "https://auth.syn.gl"
+    auth_syn_client_id: str = ""
+    auth_syn_client_secret: str = ""
+    auth_syn_redirect_uri: str = "https://upload.syn.gl/auth/callback"
+    auth_syn_default_role: str = "creator"
     
     # Subscription tiers
     free_tier_quota: int = 10

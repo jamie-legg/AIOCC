@@ -193,6 +193,16 @@ function App() {
     }
   };
 
+  const handleSsoLogin = async () => {
+    setNotice(null);
+    try {
+      const result = await studioApi.startSso();
+      window.location.assign(result.authUrl);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'SSO is not available.');
+    }
+  };
+
   const handleLock = () => {
     clearStoredAdminToken();
     setAuthPassword('');
@@ -227,8 +237,16 @@ function App() {
               Production access is restricted. Use your admin, creator, or viewer account.
             </p>
             {notice ? <div className="mt-4 rounded-lg border border-studio-danger/30 bg-studio-danger/10 px-4 py-3 text-sm text-studio-danger">{notice}</div> : null}
+            <button className="primary-button mt-5 w-full justify-center" type="button" onClick={handleSsoLogin}>
+              Continue with syn.gl
+            </button>
+            <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-studio-muted">
+              <span className="h-px flex-1 bg-studio-border" />
+              Local fallback
+              <span className="h-px flex-1 bg-studio-border" />
+            </div>
             <input
-              className="studio-input mt-5"
+              className="studio-input"
               type="email"
               value={authEmail}
               onChange={(event) => setAuthEmail(event.target.value)}

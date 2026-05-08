@@ -1,10 +1,13 @@
 """Authentication API endpoints."""
 
+import secrets
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
+import requests
 from typing import Literal, Optional
 from ..database import get_db
 from ..models import User, UserRole
@@ -13,7 +16,9 @@ from ..services.quota_service import QuotaService
 from ..config import settings
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+sso_router = APIRouter(prefix="/auth", tags=["sso"])
 security = HTTPBearer()
+SSO_STATES: dict[str, bool] = {}
 
 
 class RegisterRequest(BaseModel):
@@ -59,6 +64,19 @@ class UpdateUserRequest(BaseModel):
     role: Optional[Literal["admin", "creator", "viewer"]] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+
+
+class SSOStartResponse(BaseModel):
+    authUrl: str
+
+
+def _issue_token(user: User) -> TokenResponse:
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = AuthService.create_access_token(
+        data={"sub": user.email, "role": user.role},
+        expires_delta=access_token_expires,
+    )
+    return TokenResponse(access_token=access_token, api_key=user.api_key, user=user)
 
 
 def get_current_user_from_token(
@@ -155,18 +173,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail="Incorrect email or password"
         )
     
-    # Create access token
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = AuthService.create_access_token(
-        data={"sub": user.email, "role": user.role},
-        expires_delta=access_token_expires
-    )
-    
-    return TokenResponse(
-        access_token=access_token,
-        api_key=user.api_key,
-        user=user,
-    )
+    return _issue_token(user)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -232,4 +239,84 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.get("/sso/start", response_model=SSOStartResponse)
+def start_sso():
+    if not settings.auth_syn_client_id:
+        raise HTTPException(status_code=503, detail="SSO is not configured")
+    state = secrets.token_urlsafe(24)
+    SSO_STATES[state] = True
+    params = {
+        "client_id": settings.auth_syn_client_id,
+        "redirect_uri": settings.auth_syn_redirect_uri,
+        "response_type": "code",
+        "scope": "openid profile email",
+        "state": state,
+    }
+    query = "&".join(f"{key}={requests.utils.quote(str(value), safe='')}" for key, value in params.items())
+    return SSOStartResponse(authUrl=f"{settings.auth_syn_base_url.rstrip('/')}/oauth/authorize?{query}")
+
+
+@sso_router.get("/callback")
+def sso_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if error or not code or not state or not SSO_STATES.pop(state, None):
+        return HTMLResponse("<h1>Sign in failed</h1><p>Return to Upload Studio and try again.</p>", status_code=400)
+
+    try:
+        token_response = requests.post(
+            f"{settings.auth_syn_base_url.rstrip('/')}/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": settings.auth_syn_redirect_uri,
+                "client_id": settings.auth_syn_client_id,
+                "client_secret": settings.auth_syn_client_secret,
+            },
+            timeout=20,
+        )
+        token_response.raise_for_status()
+        token_data = token_response.json()
+
+        userinfo_response = requests.get(
+            f"{settings.auth_syn_base_url.rstrip('/')}/oauth/userinfo",
+            headers={"Authorization": f"Bearer {token_data['access_token']}"},
+            timeout=20,
+        )
+        userinfo_response.raise_for_status()
+        userinfo = userinfo_response.json()
+    except Exception as exc:
+        print(f"auth.syn.gl SSO callback failed: {exc}")
+        return HTMLResponse("<h1>Sign in failed</h1><p>Return to Upload Studio and try again.</p>", status_code=400)
+
+    email = userinfo.get("email")
+    if not email:
+        return HTMLResponse("<h1>Sign in failed</h1><p>No verified email was returned.</p>", status_code=400)
+
+    user = AuthService.get_user_by_email(db, email)
+    if not user:
+        default_role = settings.auth_syn_default_role if settings.auth_syn_default_role in {"admin", "creator", "viewer"} else "creator"
+        user = AuthService.create_user(db, email, secrets.token_urlsafe(24), role=default_role)
+        QuotaService.get_or_create_subscription(db, user)
+
+    local_token = _issue_token(user).access_token
+    return HTMLResponse(
+        f"""
+        <html>
+          <head><title>Signed in</title></head>
+          <body>
+            <p>Signed in. Returning to Upload Studio...</p>
+            <script>
+              localStorage.setItem('aiocc_access_token', {local_token!r});
+              window.location.href = '/';
+            </script>
+          </body>
+        </html>
+        """
+    )
 

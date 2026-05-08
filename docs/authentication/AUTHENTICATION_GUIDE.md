@@ -142,6 +142,27 @@ Upload Studio uses three roles:
 
 The current admin UI includes user creation and upload-count monitoring. The next iteration should add richer audit logs, per-user quotas, user disable/reset controls, and encrypted database-backed OAuth token storage.
 
+## syn.gl SSO
+
+`auth.syn.gl` is the shared identity service for syn.gl projects. Upload Studio is registered as an OAuth client:
+
+```bash
+AUTH_SYN_BASE_URL=https://auth.syn.gl
+AUTH_SYN_CLIENT_ID=upload-studio
+AUTH_SYN_CLIENT_SECRET=<server-only-client-secret>
+AUTH_SYN_REDIRECT_URI=https://upload.syn.gl/auth/callback
+AUTH_SYN_DEFAULT_ROLE=creator
+```
+
+The login screen uses `Continue with syn.gl` as the primary path. Local username/password login remains as a fallback while auth.syn.gl matures.
+
+The Upload Studio OAuth client registered in `/data/auth/auth.db` uses:
+
+```text
+client_id: upload-studio
+redirect_uri: https://upload.syn.gl/auth/callback
+```
+
 ## Production Notes
 
 - Set a strong `SECRET_KEY`.
