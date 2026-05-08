@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    min-width: 1024px;
+    background: #070c12;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-studio-border bg-studio-panel/90 shadow-panel backdrop-blur-xl;
+  }
+
+  .primary-button {
+    @apply inline-flex items-center gap-2 rounded-lg bg-studio-cyan px-5 py-3 text-sm font-semibold text-studio-bg shadow-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .secondary-button {
+    @apply inline-flex items-center gap-2 rounded-md border border-studio-border bg-white/[0.03] px-3 py-2 text-sm font-medium text-studio-text transition hover:border-studio-cyan hover:text-studio-cyan disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .field-label {
+    @apply mb-2 flex items-center justify-between text-sm font-medium text-studio-text;
+  }
+
+  .field-label span:last-child {
+    @apply text-xs font-normal text-studio-muted;
+  }
+
+  .studio-input {
+    @apply w-full rounded-md border border-studio-border bg-[#0b1118] px-3 py-3 text-sm text-studio-text outline-none transition placeholder:text-studio-muted focus:border-studio-cyan focus:ring-2 focus:ring-studio-cyan/10;
+  }
+}

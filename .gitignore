@@ -1,0 +1,88 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+*.db
+*.sqlite
+*.sqlite3
+analytics_backup.db
+uploaded_clips/
+test_videos/
+.playwright-mcp/
+assets/outro.png
+assets/pls_like_follow.png
+assets/syn_watermark.png
+overlay/
+.content_creation/
+
+# Credentials and secrets
+creds/
+*.json
+!upload-studio/package.json
+!upload-studio/package-lock.json
+!upload-studio/tsconfig.json
+!upload-studio/tsconfig.node.json
+client_secret*.json
+client_secrets.json
+*_token.json
+credentials.json
+auth_*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Test outputs
+test_output/
+processed_videos/
