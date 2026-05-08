@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 from ..models import User, UserRole
 from ..config import settings
 
-# Password hashing. bcrypt_sha256 safely handles long generated passwords by
-# pre-hashing before bcrypt's 72-byte input limit.
-pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+# Password hashing. pbkdf2_sha256 avoids bcrypt backend/version limits while
+# still giving us salted password hashes for the beta RBAC login system.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
 class AuthService:

@@ -13,7 +13,7 @@
 - **Production OAuth redirect override**: Fixed the `syn-uk` private environment after verification showed Instagram still using an old ngrok redirect override. YouTube, Instagram, and TikTok production redirect variables now point to `https://upload.syn.gl/api/oauth/{platform}/callback`.
 - **Public history rewrite**: Replaced the newly published GitHub history with a clean public root commit so removed local databases, screenshots, overlays, and test media are no longer present in branch history.
 - **JWT RBAC**: Replaced the temporary studio token gate with username/password login, JWT bearer auth, and `admin` / `creator` / `viewer` roles. Added bootstrap admin support, admin user creation, per-user upload history filtering, and an admin monitoring panel for user/upload counts.
-- **Password hashing**: Switched auth hashing to `bcrypt_sha256` after production bootstrap hit bcrypt's 72-byte input limit with generated credentials.
+- **Password hashing**: Switched auth hashing to `pbkdf2_sha256` after production bootstrap hit bcrypt backend/version limits with generated credentials.
 
 ## 2026-05-04 — upload-first rebuild
 
