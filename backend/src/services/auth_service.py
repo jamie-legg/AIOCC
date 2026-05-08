@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from ..models import User, UserRole
 from ..config import settings
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing. bcrypt_sha256 safely handles long generated passwords by
+# pre-hashing before bcrypt's 72-byte input limit.
+pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 
 class AuthService:
