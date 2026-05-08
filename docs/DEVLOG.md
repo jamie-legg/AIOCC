@@ -15,6 +15,7 @@
 - **JWT RBAC**: Replaced the temporary studio token gate with username/password login, JWT bearer auth, and `admin` / `creator` / `viewer` roles. Added bootstrap admin support, admin user creation, per-user upload history filtering, and an admin monitoring panel for user/upload counts.
 - **Password hashing**: Switched auth hashing to `pbkdf2_sha256` after production bootstrap hit bcrypt backend/version limits with generated credentials.
 - **auth.syn.gl SSO**: Repaired the existing `/data/auth` OAuth service on `syn-uk`, rotated its default admin password/secrets, registered Upload Studio as an OAuth client, issued a valid `auth.syn.gl` certificate, and added Upload Studio SSO start/callback routes while keeping local login as a fallback.
+- **auth-syn-gl module tracking**: Added `auth-syn-gl/` as an open-source module scaffold with secure env template, package metadata, data model draft, OAuth client registry, and phased upgrade roadmap for shared syn.gl identity, roles, AI usage, and monetisation.
 
 ## 2026-05-04 — upload-first rebuild
 

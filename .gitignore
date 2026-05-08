@@ -23,6 +23,9 @@ creds/
 !upload-studio/package-lock.json
 !upload-studio/tsconfig.json
 !upload-studio/tsconfig.node.json
+!auth-syn-gl/package.json
+!auth-syn-gl/package-lock.json
+!auth-syn-gl/tsconfig.json
 client_secret*.json
 client_secrets.json
 *_token.json

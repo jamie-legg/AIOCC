@@ -1,0 +1,28 @@
+{
+  "name": "@syn-gl/auth",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Central OAuth2/OIDC identity and usage service for syn.gl projects.",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "bcryptjs": "latest",
+    "better-sqlite3": "latest",
+    "cookie-parser": "latest",
+    "csurf": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "express-rate-limit": "latest",
+    "express-session": "latest",
+    "helmet": "latest",
+    "jose": "latest",
+    "zod": "latest"
+  }
+}

@@ -19,6 +19,9 @@ Essential guides for new users and setup instructions.
 ### Authentication
 User authentication system and OAuth setup for social media platforms.
 
+- **[auth.syn.gl Module](../auth-syn-gl/README.md)** - Shared identity, OAuth, roles, and usage service for syn.gl projects.
+- **[auth.syn.gl Roadmap](../auth-syn-gl/ROADMAP.md)** - Upgrade plan from the legacy host service to a hardened open-source module.
+
 ### Upload Studio
 Flat-file upload workflow, AI metadata generation, connected platform status, and recent upload results.
 

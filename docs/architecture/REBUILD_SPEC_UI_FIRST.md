@@ -20,6 +20,7 @@ The primary flow is:
 - `backend/src/main.py`: Canonical FastAPI app.
 - `backend/src/api/studio.py`: Upload Studio status, metadata, upload, retry, auth-start, and recent-upload routes.
 - `backend/src/models/studio.py`: `UploadedClip` and `PlatformUpload` records.
+- `auth-syn-gl/`: shared auth.syn.gl identity, OAuth, roles, and usage service scaffold.
 - `src/managers/oauth_manager.py`: Platform OAuth token loading and refresh support.
 - `src/managers/upload_manager.py`: Immediate upload orchestration for selected platforms.
 - `src/platform_uploaders/`: YouTube, Instagram, and TikTok publishing adapters.
@@ -60,5 +61,7 @@ The upload endpoint accepts multipart form data:
 ## Runtime Model
 
 The backend stores uploaded source files under `STUDIO_UPLOAD_DIR`, creates database records for the clip and per-platform upload attempts, and publishes immediately to the selected platforms. The frontend is a static Vite build served by nginx in production, with `/api/` and `/uploads/` proxied to FastAPI.
+
+Authentication is moving toward `auth.syn.gl` as the central identity layer for Upload Studio, Translations, Story, and future syn.gl products. Upload Studio currently supports `auth.syn.gl` SSO while keeping local login fallback during migration.
 
 `docs/INDEX.md` is absent in this repo; `docs/README.md` is the documentation hub.
