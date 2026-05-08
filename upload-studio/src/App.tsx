@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
 import { ClipPreview } from './components/ClipPreview';
 import { DropZone } from './components/DropZone';
 import { Header } from './components/Header';
@@ -6,7 +7,7 @@ import { MetadataPanel } from './components/MetadataPanel';
 import { PlatformCard } from './components/PlatformCard';
 import { PlatformPicker } from './components/PlatformPicker';
 import { RecentUploads } from './components/RecentUploads';
-import { studioApi } from './services/api';
+import { ApiError, clearStoredAdminToken, getStoredAdminToken, setStoredAdminToken, studioApi } from './services/api';
 import type { Metadata, PlatformKey, RecentUpload, StudioStatus } from './types';
 
 const initialMetadata: Metadata = {
@@ -39,16 +40,32 @@ function App() {
   const [authenticating, setAuthenticating] = useState<PlatformKey | null>(null);
   const [retryingUploadId, setRetryingUploadId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
+  const [adminToken, setAdminToken] = useState(() => getStoredAdminToken());
 
   const refreshStatus = async () => {
-    const data = await studioApi.getStatus();
-    setStatus(data);
-    setSelectedPlatforms(data.platforms.filter((platform) => platform.connected).map((platform) => platform.platform));
+    try {
+      const data = await studioApi.getStatus();
+      setStatus(data);
+      setSelectedPlatforms(data.platforms.filter((platform) => platform.connected).map((platform) => platform.platform));
+      setIsLocked(false);
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setIsLocked(true);
+        return false;
+      }
+      throw error;
+    }
   };
 
   useEffect(() => {
     refreshStatus();
-    studioApi.getRecentUploads().then(setRecentUploads);
+    studioApi.getRecentUploads().then(setRecentUploads).catch((error) => {
+      if (!(error instanceof ApiError && error.status === 401)) {
+        throw error;
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -140,12 +157,65 @@ function App() {
     }
   };
 
+  const handleUnlock = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setStoredAdminToken(adminToken.trim());
+    setNotice(null);
+    const unlocked = await refreshStatus();
+    if (!unlocked) {
+      setNotice('Invalid admin token.');
+      return;
+    }
+    await studioApi.getRecentUploads().then(setRecentUploads);
+  };
+
+  const handleLock = () => {
+    clearStoredAdminToken();
+    setAdminToken('');
+    setIsLocked(true);
+    setNotice(null);
+  };
+
+  if (isLocked) {
+    return (
+      <div className="min-h-screen bg-studio-bg text-studio-text">
+        <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_10%_0%,rgba(50,199,244,0.14),transparent_32%),radial-gradient(circle_at_95%_10%,rgba(217,70,239,0.12),transparent_30%)]" />
+        <main className="mx-auto flex min-h-screen max-w-xl items-center px-6">
+          <form className="panel w-full p-6" onSubmit={handleUnlock}>
+            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-studio-cyan">Admin Access</div>
+            <h1 className="mt-3 text-2xl font-bold">Unlock Upload Studio</h1>
+            <p className="mt-3 text-sm text-studio-muted">
+              Production access is restricted. Enter the admin token to manage connections, generate metadata, and publish uploads.
+            </p>
+            {notice ? <div className="mt-4 rounded-lg border border-studio-danger/30 bg-studio-danger/10 px-4 py-3 text-sm text-studio-danger">{notice}</div> : null}
+            <input
+              className="studio-input mt-5"
+              type="password"
+              value={adminToken}
+              onChange={(event) => setAdminToken(event.target.value)}
+              placeholder="Admin token"
+              autoFocus
+            />
+            <button className="primary-button mt-5 w-full justify-center" type="submit">
+              Unlock Studio
+            </button>
+          </form>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-studio-bg text-studio-text">
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_10%_0%,rgba(50,199,244,0.14),transparent_32%),radial-gradient(circle_at_95%_10%,rgba(217,70,239,0.12),transparent_30%)]" />
       <Header status={status} />
 
       <main className="mx-auto max-w-7xl px-6 py-6">
+        <div className="mb-4 flex justify-end">
+          <button className="secondary-button" type="button" onClick={handleLock}>
+            Lock Studio
+          </button>
+        </div>
         <div className="grid grid-cols-3 gap-5">
           {status.platforms.map((platform) => (
             <PlatformCard key={platform.platform} platform={platform} onClick={(item) => handlePlatformAuth(item.platform)} />

@@ -1,6 +1,17 @@
 import type { AuthStartResult, Metadata, PlatformKey, RecentUpload, RetryUploadResult, StudioStatus, UploadResult } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const ADMIN_TOKEN_STORAGE_KEY = 'aiocc_admin_token';
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 const fallbackStatus: StudioStatus = {
   authenticated: false,
@@ -16,14 +27,45 @@ const fallbackStatus: StudioStatus = {
 
 const fallbackUploads: RecentUpload[] = [];
 
+export function getStoredAdminToken() {
+  return window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+}
+
+export function setStoredAdminToken(token: string) {
+  window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+}
+
+export function clearStoredAdminToken() {
+  window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+}
+
 async function request<T>(path: string, init?: RequestInit, fallback?: T): Promise<T> {
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, init);
+    const headers = new Headers(init?.headers);
+    const adminToken = getStoredAdminToken();
+    if (adminToken) {
+      headers.set('X-Studio-Admin-Token', adminToken);
+    }
+
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+    });
     if (!response.ok) {
-      throw new Error(await response.text());
+      let message = 'Request failed.';
+      try {
+        const body = await response.json();
+        message = body.detail || message;
+      } catch {
+        message = await response.text();
+      }
+      throw new ApiError(message, response.status);
     }
     return (await response.json()) as T;
   } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      throw error;
+    }
     if (fallback !== undefined) {
       return fallback;
     }

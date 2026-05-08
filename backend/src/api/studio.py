@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 import requests
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel
@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models import OAuthCredential, PlatformUpload, UploadedClip, User
+from ..models import PlatformUpload, UploadedClip, User
 from ..services.ai_service import AIService
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -32,7 +32,18 @@ if str(SRC_DIR) not in sys.path:
 from managers.oauth_manager import OAuthCredentials, OAuthManager  # noqa: E402
 from managers.upload_manager import UploadManager  # noqa: E402
 
-router = APIRouter(prefix="/api/v1/studio", tags=["studio"])
+def require_studio_admin(request: Request) -> None:
+    """Require the private admin token when configured."""
+    expected_token = os.getenv("STUDIO_ADMIN_TOKEN", "").strip()
+    if not expected_token:
+        return
+
+    provided_token = request.headers.get("X-Studio-Admin-Token", "").strip()
+    if provided_token != expected_token:
+        raise HTTPException(status_code=401, detail="Admin access required")
+
+
+router = APIRouter(prefix="/api/v1/studio", tags=["studio"], dependencies=[Depends(require_studio_admin)])
 callback_router = APIRouter(prefix="/api/oauth", tags=["studio-oauth"])
 
 PLATFORMS = ("youtube", "instagram", "tiktok")

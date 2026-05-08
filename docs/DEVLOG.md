@@ -12,6 +12,7 @@
 - **Hosted OAuth and UI privacy**: Replaced the platform-card local helper launch with hosted OAuth URLs and FastAPI callbacks at `/api/oauth/{platform}/callback`. Removed server log paths, `.env` variable names, raw backend failure details, and absolute deployment paths from public UI/API responses; Upload Studio now shows generic connection/action messages while details stay in server logs.
 - **Production OAuth redirect override**: Fixed the `syn-uk` private environment after verification showed Instagram still using an old ngrok redirect override. YouTube, Instagram, and TikTok production redirect variables now point to `https://upload.syn.gl/api/oauth/{platform}/callback`.
 - **Public history rewrite**: Replaced the newly published GitHub history with a clean public root commit so removed local databases, screenshots, overlays, and test media are no longer present in branch history.
+- **Production admin gate**: Added `STUDIO_ADMIN_TOKEN` protection for Upload Studio API routes and a frontend unlock screen. This stops public visitors from generating metadata, starting platform OAuth, uploading clips, retrying uploads, or reading studio status/history unless they have the admin token. Documented a fuller RBAC target for admin/creator/viewer roles and upload monitoring.
 
 ## 2026-05-04 — upload-first rebuild
 
