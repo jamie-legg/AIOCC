@@ -5,7 +5,7 @@ Upload Studio keeps authentication focused on the web upload workflow.
 ## Current State
 
 - Backend account primitives for JWT sessions and API keys.
-- Upload Studio production access can be locked with `STUDIO_ADMIN_TOKEN` and `STUDIO_USER_TOKENS`.
+- Upload Studio production access uses username/password login, JWTs, and roles.
 - OAuth credential storage for YouTube, Instagram, and TikTok.
 - Platform connect/re-auth flows started from `POST /api/v1/studio/auth/{platform}/start`.
 - Hosted callbacks at `/api/oauth/{platform}/callback`.
@@ -25,8 +25,9 @@ OAUTH_REDIRECT_BASE_URL=https://upload.syn.gl
 ALLOWED_ORIGINS=https://upload.syn.gl
 STUDIO_PUBLIC_BASE_URL=https://upload.syn.gl
 VITE_API_BASE_URL=https://upload.syn.gl
-STUDIO_ADMIN_TOKEN=<generate-a-long-random-value>
-STUDIO_USER_TOKENS=<comma-separated-alpha-user-tokens>
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_PASSWORD=<generate-a-long-random-value>
+ALLOW_PUBLIC_REGISTRATION=false
 ```
 
 Platform credentials:
@@ -131,20 +132,15 @@ The current hosted browser/callback flow is in place. The next cleanup should mo
 3. Keep the frontend token-free.
 4. Keep provider client secrets in server environment or a secret manager only.
 
-## RBAC Target
+## RBAC
 
-The immediate production lock has two token roles:
+Upload Studio uses three roles:
 
-1. Admin token: can connect/reconnect platform OAuth, generate metadata, upload, retry, and view studio status/history.
-2. Alpha user tokens: can generate metadata, upload, retry, and view studio status/history after an admin connects platforms. They cannot start platform OAuth.
+1. `admin`: can connect platform accounts, generate metadata, upload, retry, view all upload history, and create users.
+2. `creator`: can generate metadata, upload, retry their own uploads, and view their own upload history after an admin connects platforms.
+3. `viewer`: can sign in and view status/history, but cannot publish clips or connect platforms.
 
-A fuller RBAC system should add:
-
-1. `admin` users who can connect platform accounts, review all uploads, retry failures, and manage users.
-2. `creator` users who can upload clips and view their own upload history.
-3. `viewer` users who can only view status/history.
-4. Per-user upload records and audit logs for metadata generation, platform auth, upload attempts, retries, and failures.
-5. Admin screens for user status, quotas, connected account health, and recent upload outcomes.
+The current admin UI includes user creation and upload-count monitoring. The next iteration should add richer audit logs, per-user quotas, user disable/reset controls, and encrypted database-backed OAuth token storage.
 
 ## Production Notes
 

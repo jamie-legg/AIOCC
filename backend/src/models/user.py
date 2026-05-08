@@ -15,6 +15,12 @@ class SubscriptionTier(str, enum.Enum):
     ENTERPRISE = "enterprise"
 
 
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    CREATOR = "creator"
+    VIEWER = "viewer"
+
+
 class User(Base):
     """User model for authentication and account management."""
     
@@ -29,6 +35,7 @@ class User(Base):
         default=SubscriptionTier.FREE,
         nullable=False
     )
+    role = Column(String, default=UserRole.CREATOR.value, nullable=False, index=True)
     stripe_customer_id = Column(String, unique=True, nullable=True)
     stripe_subscription_id = Column(String, unique=True, nullable=True)
     is_active = Column(Integer, default=1, nullable=False)  # SQLite uses integers for booleans

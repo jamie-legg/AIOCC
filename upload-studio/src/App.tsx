@@ -8,7 +8,7 @@ import { PlatformCard } from './components/PlatformCard';
 import { PlatformPicker } from './components/PlatformPicker';
 import { RecentUploads } from './components/RecentUploads';
 import { ApiError, clearStoredAdminToken, getStoredAdminToken, setStoredAdminToken, studioApi } from './services/api';
-import type { Metadata, PlatformKey, RecentUpload, StudioStatus } from './types';
+import type { AdminUpload, AuthUser, Metadata, PlatformKey, RecentUpload, StudioStatus, UserRole } from './types';
 
 const initialMetadata: Metadata = {
   title: '',
@@ -19,7 +19,7 @@ const initialMetadata: Metadata = {
 
 const initialStatus: StudioStatus = {
   authenticated: false,
-  role: 'user',
+  role: 'viewer',
   user: { name: 'AIOCC' },
   platforms: [
     { platform: 'youtube', label: 'YouTube', handle: 'Not connected', connected: false, accent: '#ff1f3d' },
@@ -42,7 +42,20 @@ function App() {
   const [retryingUploadId, setRetryingUploadId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
-  const [adminToken, setAdminToken] = useState(() => getStoredAdminToken());
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [adminUsers, setAdminUsers] = useState<AuthUser[]>([]);
+  const [adminUploads, setAdminUploads] = useState<AdminUpload[]>([]);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<UserRole>('creator');
+
+  const loadAdminData = async (role = status.role) => {
+    if (role !== 'admin') return;
+    const [users, uploads] = await Promise.all([studioApi.listUsers(), studioApi.getAdminUploads()]);
+    setAdminUsers(users);
+    setAdminUploads(uploads);
+  };
 
   const refreshStatus = async () => {
     try {
@@ -50,6 +63,7 @@ function App() {
       setStatus(data);
       setSelectedPlatforms(data.platforms.filter((platform) => platform.connected).map((platform) => platform.platform));
       setIsLocked(false);
+      await loadAdminData(data.role);
       return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -77,6 +91,7 @@ function App() {
 
   const connectedPlatforms = useMemo(() => status.platforms.filter((platform) => platform.connected), [status.platforms]);
   const isAdmin = status.role === 'admin';
+  const canPublish = status.role === 'admin' || status.role === 'creator';
 
   const handleSelectFile = async (file: File) => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -165,21 +180,39 @@ function App() {
 
   const handleUnlock = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setStoredAdminToken(adminToken.trim());
     setNotice(null);
-    const unlocked = await refreshStatus();
-    if (!unlocked) {
-      setNotice('Invalid admin token.');
-      return;
+    try {
+      const result = await studioApi.login(authEmail.trim(), authPassword);
+      setStoredAdminToken(result.access_token);
+      setStatus((current) => ({ ...current, role: result.user.role, user: { name: result.user.email } }));
+      await refreshStatus();
+      await studioApi.getRecentUploads().then(setRecentUploads);
+    } catch {
+      clearStoredAdminToken();
+      setNotice('Invalid email or password.');
     }
-    await studioApi.getRecentUploads().then(setRecentUploads);
   };
 
   const handleLock = () => {
     clearStoredAdminToken();
-    setAdminToken('');
+    setAuthPassword('');
     setIsLocked(true);
     setNotice(null);
+  };
+
+  const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setNotice(null);
+    try {
+      await studioApi.createUser(newUserEmail.trim(), newUserPassword, newUserRole);
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole('creator');
+      setNotice('User created.');
+      await loadAdminData('admin');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not create user.');
+    }
   };
 
   if (isLocked) {
@@ -188,22 +221,29 @@ function App() {
         <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_10%_0%,rgba(50,199,244,0.14),transparent_32%),radial-gradient(circle_at_95%_10%,rgba(217,70,239,0.12),transparent_30%)]" />
         <main className="mx-auto flex min-h-screen max-w-xl items-center px-6">
           <form className="panel w-full p-6" onSubmit={handleUnlock}>
-            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-studio-cyan">Studio Access</div>
-            <h1 className="mt-3 text-2xl font-bold">Unlock Upload Studio</h1>
+            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-studio-cyan">Studio Login</div>
+            <h1 className="mt-3 text-2xl font-bold">Sign in to Upload Studio</h1>
             <p className="mt-3 text-sm text-studio-muted">
-              Production access is restricted. Enter an admin or alpha user token to continue.
+              Production access is restricted. Use your admin, creator, or viewer account.
             </p>
             {notice ? <div className="mt-4 rounded-lg border border-studio-danger/30 bg-studio-danger/10 px-4 py-3 text-sm text-studio-danger">{notice}</div> : null}
             <input
               className="studio-input mt-5"
-              type="password"
-              value={adminToken}
-              onChange={(event) => setAdminToken(event.target.value)}
-              placeholder="Access token"
+              type="email"
+              value={authEmail}
+              onChange={(event) => setAuthEmail(event.target.value)}
+              placeholder="Email"
               autoFocus
             />
+            <input
+              className="studio-input mt-3"
+              type="password"
+              value={authPassword}
+              onChange={(event) => setAuthPassword(event.target.value)}
+              placeholder="Password"
+            />
             <button className="primary-button mt-5 w-full justify-center" type="submit">
-              Unlock Studio
+              Sign In
             </button>
           </form>
         </main>
@@ -224,7 +264,7 @@ function App() {
         </div>
         <div className="mb-4 rounded-lg border border-studio-border bg-black/10 px-4 py-3 text-sm text-studio-muted">
           Signed in as <span className="font-semibold text-studio-text">{isAdmin ? 'Admin' : 'Alpha user'}</span>
-          {isAdmin ? ' - platform connections and publishing are enabled.' : ' - publishing is enabled after an admin connects platforms.'}
+          {isAdmin ? ' - platform connections and publishing are enabled.' : status.role === 'creator' ? ' - publishing is enabled after an admin connects platforms.' : ' - viewer access only.'}
         </div>
         <div className="grid grid-cols-3 gap-5">
           {status.platforms.map((platform) => (
@@ -242,7 +282,7 @@ function App() {
 
         <div className="mt-5 grid grid-cols-[1fr_0.96fr] gap-5">
           <section className="panel p-4">
-            <DropZone onSelectFile={handleSelectFile} />
+            {canPublish ? <DropZone onSelectFile={handleSelectFile} /> : <div className="rounded-xl border border-studio-border bg-black/10 p-6 text-sm text-studio-muted">Viewer accounts can inspect status and upload history, but cannot publish clips.</div>}
             <ClipPreview file={selectedFile} previewUrl={previewUrl} onChangeFile={() => fileInputRef.current?.click()} />
             <input
               ref={fileInputRef}
@@ -254,19 +294,37 @@ function App() {
                 if (file) handleSelectFile(file);
               }}
             />
-            <PlatformPicker platforms={connectedPlatforms} selected={selectedPlatforms} onToggle={handleTogglePlatform} canManageConnections={isAdmin} />
+            {canPublish ? <PlatformPicker platforms={connectedPlatforms} selected={selectedPlatforms} onToggle={handleTogglePlatform} canManageConnections={isAdmin} /> : null}
           </section>
 
           <div className="space-y-4">
-            <MetadataPanel
-              metadata={metadata}
-              isGenerating={isGenerating}
-              isUploading={isUploading}
-              onChange={setMetadata}
-              onRegenerate={handleRegenerate}
-              onUpload={handleUpload}
-            />
+            {canPublish ? (
+              <MetadataPanel
+                metadata={metadata}
+                isGenerating={isGenerating}
+                isUploading={isUploading}
+                onChange={setMetadata}
+                onRegenerate={handleRegenerate}
+                onUpload={handleUpload}
+              />
+            ) : null}
             <RecentUploads uploads={recentUploads} retryingUploadId={retryingUploadId} onRetry={handleRetryUpload} />
+            {isAdmin ? (
+              <section className="panel p-4">
+                <h2 className="font-semibold text-studio-text">Admin</h2>
+                <form className="mt-3 grid grid-cols-[1fr_1fr_auto_auto] gap-2" onSubmit={handleCreateUser}>
+                  <input className="studio-input" type="email" placeholder="user@example.com" value={newUserEmail} onChange={(event) => setNewUserEmail(event.target.value)} />
+                  <input className="studio-input" type="password" placeholder="Temporary password" value={newUserPassword} onChange={(event) => setNewUserPassword(event.target.value)} />
+                  <select className="studio-input" value={newUserRole} onChange={(event) => setNewUserRole(event.target.value as UserRole)}>
+                    <option value="creator">Creator</option>
+                    <option value="viewer">Viewer</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button className="secondary-button" type="submit">Create</button>
+                </form>
+                <div className="mt-4 text-sm text-studio-muted">{adminUsers.length} user(s), {adminUploads.length} recent platform upload row(s).</div>
+              </section>
+            ) : null}
           </div>
         </div>
       </main>

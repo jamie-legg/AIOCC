@@ -5,7 +5,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from ..models import User
+from ..models import User, UserRole
 from ..config import settings
 
 # Password hashing
@@ -69,7 +69,7 @@ class AuthService:
         return db.query(User).filter(User.api_key == api_key).first()
     
     @staticmethod
-    def create_user(db: Session, email: str, password: str) -> User:
+    def create_user(db: Session, email: str, password: str, role: str = UserRole.CREATOR.value) -> User:
         """Create a new user."""
         hashed_password = AuthService.get_password_hash(password)
         api_key = User.generate_api_key()
@@ -77,7 +77,8 @@ class AuthService:
         user = User(
             email=email,
             hashed_password=hashed_password,
-            api_key=api_key
+            api_key=api_key,
+            role=role,
         )
         
         db.add(user)

@@ -1,4 +1,5 @@
 export type PlatformKey = 'youtube' | 'instagram' | 'tiktok';
+export type UserRole = 'admin' | 'creator' | 'viewer';
 
 export interface PlatformStatus {
   platform: PlatformKey;
@@ -29,12 +30,40 @@ export interface RecentUpload {
 
 export interface StudioStatus {
   authenticated: boolean;
-  role: 'admin' | 'user';
+  role: UserRole;
   user: {
     name: string;
     avatarUrl?: string;
   };
   platforms: PlatformStatus[];
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  api_key: string;
+  subscription_tier: string;
+  role: UserRole;
+  is_active: number;
+}
+
+export interface LoginResult {
+  access_token: string;
+  token_type: string;
+  api_key: string;
+  user: AuthUser;
+}
+
+export interface AdminUpload {
+  uploadId: number;
+  clipId: number;
+  userEmail: string;
+  platform: PlatformKey;
+  title: string;
+  status: string;
+  uploadedAt: string;
+  url?: string | null;
+  error?: string | null;
 }
 
 export interface UploadResult {

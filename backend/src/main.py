@@ -7,9 +7,48 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
 import time
+from sqlalchemy import inspect, text
 from .config import settings
-from .database import engine, Base
+from .database import engine, Base, SessionLocal
 from .api import auth, enrichment, oauth_proxy, analytics, studio
+from .models import User, UserRole
+from .services.auth_service import AuthService
+
+
+def ensure_runtime_schema() -> None:
+    """Apply small SQLite-safe schema additions for public beta deploys."""
+    inspector = inspect(engine)
+    if "users" in inspector.get_table_names():
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "role" not in user_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT 'creator' NOT NULL"))
+
+
+def ensure_bootstrap_admin() -> None:
+    """Create or update the configured bootstrap admin account."""
+    if not settings.bootstrap_admin_email or not settings.bootstrap_admin_password:
+        return
+
+    db = SessionLocal()
+    try:
+        user = AuthService.get_user_by_email(db, settings.bootstrap_admin_email)
+        if user:
+            user.role = UserRole.ADMIN.value
+            user.is_active = 1
+            if settings.bootstrap_admin_password:
+                user.hashed_password = AuthService.get_password_hash(settings.bootstrap_admin_password)
+        else:
+            AuthService.create_user(
+                db,
+                settings.bootstrap_admin_email,
+                settings.bootstrap_admin_password,
+                role=UserRole.ADMIN.value,
+            )
+            return
+        db.commit()
+    finally:
+        db.close()
 
 
 @asynccontextmanager
@@ -21,6 +60,8 @@ async def lifespan(app: FastAPI):
     # Create database tables
     print("Creating database tables...")
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_schema()
+    ensure_bootstrap_admin()
     print("Database tables created")
     
     yield

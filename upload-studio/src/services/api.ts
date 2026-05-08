@@ -1,7 +1,7 @@
-import type { AuthStartResult, Metadata, PlatformKey, RecentUpload, RetryUploadResult, StudioStatus, UploadResult } from '../types';
+import type { AdminUpload, AuthStartResult, AuthUser, LoginResult, Metadata, PlatformKey, RecentUpload, RetryUploadResult, StudioStatus, UploadResult, UserRole } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-const ADMIN_TOKEN_STORAGE_KEY = 'aiocc_admin_token';
+const ACCESS_TOKEN_STORAGE_KEY = 'aiocc_access_token';
 
 export class ApiError extends Error {
   status: number;
@@ -15,7 +15,7 @@ export class ApiError extends Error {
 
 const fallbackStatus: StudioStatus = {
   authenticated: false,
-  role: 'user',
+  role: 'viewer',
   user: {
     name: 'AIOCC',
   },
@@ -29,15 +29,15 @@ const fallbackStatus: StudioStatus = {
 const fallbackUploads: RecentUpload[] = [];
 
 export function getStoredAdminToken() {
-  return window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || window.localStorage.getItem('aiocc_access_token') || '';
+  return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || '';
 }
 
 export function setStoredAdminToken(token: string) {
-  window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
 }
 
 export function clearStoredAdminToken() {
-  window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
 }
 
 async function request<T>(path: string, init?: RequestInit, fallback?: T): Promise<T> {
@@ -45,7 +45,7 @@ async function request<T>(path: string, init?: RequestInit, fallback?: T): Promi
     const headers = new Headers(init?.headers);
     const adminToken = getStoredAdminToken();
     if (adminToken) {
-      headers.set('X-Studio-Access-Token', adminToken);
+      headers.set('Authorization', `Bearer ${adminToken}`);
     }
 
     const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -75,6 +75,26 @@ async function request<T>(path: string, init?: RequestInit, fallback?: T): Promi
 }
 
 export const studioApi = {
+  login: (email: string, password: string) =>
+    request<LoginResult>('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }),
+
+  getMe: () => request<AuthUser>('/api/v1/auth/me'),
+
+  listUsers: () => request<AuthUser[]>('/api/v1/auth/users'),
+
+  createUser: (email: string, password: string, role: UserRole) =>
+    request<AuthUser>('/api/v1/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, role }),
+    }),
+
+  getAdminUploads: () => request<AdminUpload[]>('/api/v1/studio/admin/uploads'),
+
   getStatus: () => request<StudioStatus>('/api/v1/studio/status', undefined, fallbackStatus),
 
   getRecentUploads: () => request<RecentUpload[]>('/api/v1/studio/recent-uploads', undefined, fallbackUploads),

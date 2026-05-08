@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models import PlatformUpload, UploadedClip, User
+from ..api.auth import get_current_user_from_token
+from ..models import PlatformUpload, UploadedClip, User, UserRole
 from ..services.ai_service import AIService
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -32,43 +33,19 @@ if str(SRC_DIR) not in sys.path:
 from managers.oauth_manager import OAuthCredentials, OAuthManager  # noqa: E402
 from managers.upload_manager import UploadManager  # noqa: E402
 
-def _configured_user_tokens() -> set[str]:
-    raw_tokens = os.getenv("STUDIO_USER_TOKENS", "")
-    return {token.strip() for token in raw_tokens.split(",") if token.strip()}
+def require_creator(current_user: User = Depends(get_current_user_from_token)) -> User:
+    if current_user.role not in {UserRole.ADMIN.value, UserRole.CREATOR.value}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Creator access required")
+    return current_user
 
 
-def require_studio_access(request: Request) -> None:
-    """Require a private studio token and attach the resolved role."""
-    admin_token = os.getenv("STUDIO_ADMIN_TOKEN", "").strip()
-    user_tokens = _configured_user_tokens()
-
-    if not admin_token and not user_tokens:
-        request.state.studio_role = "admin"
-        return
-
-    provided_token = (
-        request.headers.get("X-Studio-Access-Token")
-        or request.headers.get("X-Studio-Admin-Token")
-        or ""
-    ).strip()
-
-    if admin_token and provided_token == admin_token:
-        request.state.studio_role = "admin"
-        return
-
-    if provided_token in user_tokens:
-        request.state.studio_role = "user"
-        return
-
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Studio access required")
-
-
-def require_studio_admin(request: Request) -> None:
-    if getattr(request.state, "studio_role", None) != "admin":
+def require_admin(current_user: User = Depends(get_current_user_from_token)) -> User:
+    if current_user.role != UserRole.ADMIN.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
 
 
-router = APIRouter(prefix="/api/v1/studio", tags=["studio"], dependencies=[Depends(require_studio_access)])
+router = APIRouter(prefix="/api/v1/studio", tags=["studio"])
 callback_router = APIRouter(prefix="/api/oauth", tags=["studio-oauth"])
 
 PLATFORMS = ("youtube", "instagram", "tiktok")
@@ -88,7 +65,7 @@ class PlatformStatus(BaseModel):
 
 class StudioStatus(BaseModel):
     authenticated: bool
-    role: Literal["admin", "user"]
+    role: Literal["admin", "creator", "viewer"]
     user: dict
     platforms: list[PlatformStatus]
 
@@ -133,6 +110,18 @@ class RetryUploadResponse(BaseModel):
     upload: RecentUploadResponse
     uploads: list[RecentUploadResponse]
     message: str
+
+
+class AdminUploadResponse(BaseModel):
+    uploadId: int
+    clipId: int
+    userEmail: str
+    platform: str
+    title: str
+    status: str
+    uploadedAt: str
+    url: str | None = None
+    error: str | None = None
 
 
 def _upload_dir() -> Path:
@@ -389,9 +378,8 @@ def _save_oauth_credentials(platform: str, credentials: OAuthCredentials) -> Non
 
 
 @router.get("/status", response_model=StudioStatus)
-def get_status(request: Request, db: Session = Depends(get_db)):
+def get_status(current_user: User = Depends(get_current_user_from_token), db: Session = Depends(get_db)):
     """Return the upload studio shell state."""
-    _get_or_create_studio_user(db)
     oauth_manager = OAuthManager()
     configured_platforms = _configured_platforms()
 
@@ -468,14 +456,14 @@ def get_status(request: Request, db: Session = Depends(get_db)):
 
     return StudioStatus(
         authenticated=True,
-        role=getattr(request.state, "studio_role", "user"),
-        user={"name": settings.studio_user_name},
+        role=current_user.role,
+        user={"name": current_user.email},
         platforms=platform_statuses,
     )
 
 
 @router.post("/metadata", response_model=MetadataResponse)
-def generate_metadata(request: MetadataRequest):
+def generate_metadata(request: MetadataRequest, _: User = Depends(require_creator)):
     """Generate upload-ready metadata from the selected clip name."""
     try:
         metadata = AIService().generate_metadata(request.filename, request.game_context)
@@ -490,9 +478,8 @@ def generate_metadata(request: MetadataRequest):
 
 
 @router.post("/auth/{platform}/start", response_model=AuthStartResponse)
-def start_platform_auth(platform: str, request: Request):
+def start_platform_auth(platform: str, _: User = Depends(require_admin)):
     """Return a hosted OAuth URL for a platform."""
-    require_studio_admin(request)
     if platform not in PLATFORMS:
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
 
@@ -628,6 +615,7 @@ async def upload_clip(
     hashtags: str = Form(""),
     visibility: Literal["public", "unlisted", "private"] = Form("public"),
     platforms: str = Form("[]"),
+    current_user: User = Depends(require_creator),
     db: Session = Depends(get_db),
 ):
     """Save a flat-file clip upload and record selected platform results."""
@@ -650,7 +638,6 @@ async def upload_clip(
     if invalid_platforms:
         raise HTTPException(status_code=400, detail=f"Unsupported platforms: {', '.join(invalid_platforms)}")
 
-    user = _get_or_create_studio_user(db)
     safe_name = _safe_filename(video.filename)
     stored_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}_{safe_name}"
     stored_path = _upload_dir() / stored_name
@@ -669,7 +656,7 @@ async def upload_clip(
     any_success = any(result.success for result in upload_results.values())
 
     clip = UploadedClip(
-        user_id=user.id,
+        user_id=current_user.id,
         original_filename=safe_name,
         stored_path=str(stored_path),
         title=title,
@@ -704,33 +691,71 @@ async def upload_clip(
 
     return UploadResponse(
         clipId=str(clip.id),
-        uploads=[_recent_upload_response(upload) for upload in get_recent_upload_rows(db)],
+        uploads=[_recent_upload_response(upload) for upload in get_recent_upload_rows(db, current_user)],
         message=message,
     )
 
 
-def get_recent_upload_rows(db: Session) -> list[PlatformUpload]:
-    return (
+def get_recent_upload_rows(db: Session, current_user: User) -> list[PlatformUpload]:
+    query = (
         db.query(PlatformUpload)
         .join(UploadedClip)
-        .order_by(PlatformUpload.uploaded_at.desc(), PlatformUpload.id.desc())
-        .limit(12)
-        .all()
     )
+    if current_user.role != UserRole.ADMIN.value:
+        query = query.filter(UploadedClip.user_id == current_user.id)
+    return query.order_by(PlatformUpload.uploaded_at.desc(), PlatformUpload.id.desc()).limit(12).all()
 
 
 @router.get("/recent-uploads", response_model=list[RecentUploadResponse])
-def recent_uploads(db: Session = Depends(get_db)):
+def recent_uploads(
+    current_user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db),
+):
     """Return the recent per-platform upload rows shown in the studio."""
-    return [_recent_upload_response(upload) for upload in get_recent_upload_rows(db)]
+    return [_recent_upload_response(upload) for upload in get_recent_upload_rows(db, current_user)]
+
+
+@router.get("/admin/uploads", response_model=list[AdminUploadResponse])
+def admin_uploads(
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(PlatformUpload)
+        .join(UploadedClip)
+        .join(User, UploadedClip.user_id == User.id)
+        .order_by(PlatformUpload.uploaded_at.desc(), PlatformUpload.id.desc())
+        .limit(100)
+        .all()
+    )
+    return [
+        AdminUploadResponse(
+            uploadId=row.id,
+            clipId=row.clip.id,
+            userEmail=row.clip.user.email if getattr(row.clip, "user", None) else "",
+            platform=row.platform,
+            title=row.clip.title,
+            status=row.status,
+            uploadedAt=_format_uploaded_at(row.uploaded_at),
+            url=row.platform_url,
+            error=_public_error_message(row.error_message),
+        )
+        for row in rows
+    ]
 
 
 @router.post("/uploads/{upload_id}/retry", response_model=RetryUploadResponse)
-def retry_upload(upload_id: int, db: Session = Depends(get_db)):
+def retry_upload(
+    upload_id: int,
+    current_user: User = Depends(require_creator),
+    db: Session = Depends(get_db),
+):
     """Retry a failed upload row using the real uploader."""
     upload = db.query(PlatformUpload).filter(PlatformUpload.id == upload_id).first()
     if not upload:
         raise HTTPException(status_code=404, detail="Upload row not found")
+    if current_user.role != UserRole.ADMIN.value and upload.clip.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Upload is not available")
     if upload.platform not in PLATFORMS:
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {upload.platform}")
 
@@ -744,7 +769,7 @@ def retry_upload(upload_id: int, db: Session = Depends(get_db)):
         db.refresh(upload)
         return RetryUploadResponse(
             upload=_recent_upload_response(upload),
-            uploads=[_recent_upload_response(item) for item in get_recent_upload_rows(db)],
+            uploads=[_recent_upload_response(item) for item in get_recent_upload_rows(db, current_user)],
             message="The source clip is no longer available for retry.",
         )
 
@@ -765,7 +790,7 @@ def retry_upload(upload_id: int, db: Session = Depends(get_db)):
     db.refresh(upload)
     return RetryUploadResponse(
         upload=_recent_upload_response(upload),
-        uploads=[_recent_upload_response(item) for item in get_recent_upload_rows(db)],
+        uploads=[_recent_upload_response(item) for item in get_recent_upload_rows(db, current_user)],
         message=message,
     )
 

@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     youtube_handle: str = ""
     instagram_handle: str = ""
     tiktok_handle: str = ""
+    allow_public_registration: bool = False
+    bootstrap_admin_email: str = ""
+    bootstrap_admin_password: str = ""
     
     # Subscription tiers
     free_tier_quota: int = 10
